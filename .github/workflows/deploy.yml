@@ -40,5 +40,6 @@ jobs:
             --name bus-service \
             --resource-group $RESOURCE_GROUP \
             --image $ACR_SERVER/bus-service:latest \
+            --set-env-vars "RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}" \
             --output none
           echo "bus-service desplegado ✓"
