@@ -1,6 +1,7 @@
 import { getChannel, EXCHANGE } from './rabbitmq.js';
 import { broadcast } from '../ws/socket-server.js';
 import type { DomainEvent } from './event-types.js';
+import { logger } from '../logger.js';
 
 const ROUTING_TO_WS: Record<string, string> = {
   'reservas.reserva.creada':               'reserva:creada',
@@ -20,7 +21,7 @@ const ROUTING_TO_WS: Record<string, string> = {
 export async function startConsumer(): Promise<void> {
   const ch = getChannel();
   if (!ch) {
-    console.warn('[bus-consumer] canal no disponible — reintentando en 5s');
+    logger.warn('canal RabbitMQ no disponible — reintentando en 5s');
     setTimeout(startConsumer, 5000);
     return;
   }
@@ -29,7 +30,7 @@ export async function startConsumer(): Promise<void> {
     const { queue } = await ch.assertQueue('', { exclusive: true, autoDelete: true });
     await ch.bindQueue(queue, EXCHANGE, '#');
 
-    console.log(`[bus-consumer] suscrito → exchange:${EXCHANGE} queue:${queue}`);
+    logger.info('consumer suscrito', { exchange: EXCHANGE, queue });
 
     ch.consume(queue, (msg) => {
       if (!msg) return;
@@ -37,14 +38,14 @@ export async function startConsumer(): Promise<void> {
       try {
         const event: DomainEvent = JSON.parse(msg.content.toString());
         const wsEvt = ROUTING_TO_WS[event.eventType] ?? event.eventType;
-        console.log(`[bus-consumer] ${event.eventType} → ws:'${wsEvt}'`);
+        logger.info('evento recibido', { eventType: event.eventType, wsEvent: wsEvt, eventId: event.eventId, correlationId: event.correlationId });
         broadcast(wsEvt, event);
       } catch (err) {
-        console.error('[bus-consumer] error parseando mensaje:', err);
+        logger.error('error parseando mensaje RabbitMQ', { error: String(err) });
       }
     });
   } catch (err) {
-    console.error('[bus-consumer] error iniciando consumer:', err);
+    logger.error('error iniciando consumer', { error: String(err) });
     setTimeout(startConsumer, 5000);
   }
 }
